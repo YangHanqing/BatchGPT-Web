@@ -13,7 +13,7 @@ export default function ProgressPage() {
     const [completedTasks, setCompletedTasks] = useState<number>(0);
     const [totalTasks, setTotalTasks] = useState<number>(0);
     const [logs, setLogs] = useState<string[]>([]);
-    const [results, setResults] = useState<any[]>([]);
+    const [results, setResults] = useState<Record<string, any>[]>([]);
     const [isComplete, setIsComplete] = useState<boolean>(false);
     const [columns, setColumns] = useState<string[]>([]);
     const [promptVariables, setPromptVariables] = useState<string[]>([]);
@@ -32,28 +32,24 @@ export default function ProgressPage() {
             return;
         }
 
-        // Extract variables from prompt
         const variables = [...new Set(prompt.match(/{{(.*?)}}/g)?.map((v) => v.replace(/{{|}}/g, '')) || [])];
         setPromptVariables(variables);
 
-        // Load request configuration
         const savedConfig = localStorage.getItem('request_config');
         if (savedConfig) {
             const config = JSON.parse(savedConfig);
             setConcurrentRequests(config.concurrentRequests || 10);
             setTimeoutValue(config.timeout || 60);
             setRetries(config.retries || 3);
-            console.log('Loaded request configuration:', config);
         }
 
-        // Initialize data from uploaded file
         const reader = new FileReader();
         reader.onload = async (event) => {
             const binary = event.target?.result as ArrayBuffer;
             const workbook = XLSX.read(binary, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const jsonData = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, { header: 1 });
 
             const headers = jsonData[0] as string[];
             const data = jsonData.slice(1).map((row) =>
@@ -76,7 +72,6 @@ export default function ProgressPage() {
             isRunningRef.current = true;
             handleRequests();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [results]);
 
     const handleRequests = async () => {
@@ -87,7 +82,6 @@ export default function ProgressPage() {
         for (let i = 0; i < updatedResults.length; i++) {
             const row = updatedResults[i];
 
-            // Initiate requests
             for (const providerId of selectedProviders) {
                 const provider = getProviderById(providerId);
                 queue.push(async () => {
@@ -124,7 +118,7 @@ export default function ProgressPage() {
                             }
 
                             const result = await response.json();
-                            row[`${provider.name}_output`] = result.choices?.[0]?.message?.content || 'Request successful but no output';
+                            row[`${provider.name}_output`] = result.choices?.[0]?.message?.content || 'No output';
                             setLogs((prev) => [...prev, `Row ${i + 1}: ${provider.name} request successful.`]);
                             break;
                         } catch (error: any) {
@@ -150,7 +144,6 @@ export default function ProgressPage() {
         await Promise.all(queue.map((task) => task()));
         setResults(updatedResults);
         setIsComplete(true);
-        console.log('All requests completed.');
     };
 
     const getProviderById = (id: number) => {
@@ -173,32 +166,23 @@ export default function ProgressPage() {
 
     return (
         <div className="container mx-auto p-4">
-            {/* Download button */}
             <div className="flex justify-end mb-4">
                 <button
-                    className={`px-4 py-2 rounded text-white ${isComplete ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300'
-                        }`}
+                    className={`px-4 py-2 rounded text-white ${isComplete ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300'}`}
                     disabled={!isComplete}
                     onClick={downloadResults}
                 >
                     Download Results
                 </button>
             </div>
-
-            {/* Progress bar */}
             <div className="mb-6">
                 <h2 className="text-lg font-bold">Request Progress</h2>
                 <div className="relative w-full bg-gray-200 rounded-full h-4 mt-2">
-                    <div
-                        className="absolute top-0 left-0 h-4 bg-blue-500 rounded-full"
-                        style={{ width: `${progress}%` }}
-                    ></div>
+                    <div className="absolute top-0 left-0 h-4 bg-blue-500 rounded-full" style={{ width: `${progress}%` }}></div>
                 </div>
                 <p className="text-sm mt-2">Current Progress: {progress}%</p>
                 <p className="text-sm">Tasks Completed: {completedTasks} / {totalTasks}</p>
             </div>
-
-            {/* Logs */}
             <div className="mb-6">
                 <h2 className="text-lg font-bold">Logs</h2>
                 <div className="p-2 border rounded bg-gray-100 h-40 overflow-y-auto">
@@ -209,8 +193,6 @@ export default function ProgressPage() {
                     ))}
                 </div>
             </div>
-
-            {/* Data table */}
             <div className="mb-6">
                 <h2 className="text-lg font-bold">Request Results</h2>
                 <div className="overflow-auto border rounded h-[500px]">
