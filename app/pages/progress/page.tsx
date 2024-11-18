@@ -18,9 +18,9 @@ export default function ProgressPage() {
     const [columns, setColumns] = useState<string[]>([]);
     const [promptVariables, setPromptVariables] = useState<string[]>([]);
 
-    const [concurrentRequests, setConcurrentRequests] = useState<number>(10);
-    const [timeout, setTimeoutValue] = useState<number>(60);
-    const [retries, setRetries] = useState<number>(3);
+    const concurrentRequests = 10; // 最大并发请求数
+    const timeout = 60; // 请求超时时间（秒）
+    const retries = 3; // 最大重试次数
 
     const router = useRouter();
     const isRunningRef = useRef<boolean>(false);
@@ -101,7 +101,7 @@ export default function ProgressPage() {
                                 throw new Error(`HTTP ${response.status} ${response.statusText}`);
                             }
 
-                            const result = await response.json();
+                            const result: { choices?: { message?: { content: string } }[] } = await response.json();
                             row[`${provider.name}_output`] = result.choices?.[0]?.message?.content || 'No output';
                             setLogs((prev) => [...prev, `Row ${i + 1}: ${provider.name} request successful.`]);
                             break;
@@ -128,7 +128,7 @@ export default function ProgressPage() {
         await Promise.all(queue.map((task) => task()));
         setResults(updatedResults);
         setIsComplete(true);
-    }, [results, selectedProviders, totalTasks, retries, timeout, prompt, concurrentRequests]);
+    }, [results, selectedProviders, totalTasks, retries, timeout, prompt]);
 
     useEffect(() => {
         if (results.length > 0 && !isRunningRef.current) {
@@ -140,7 +140,7 @@ export default function ProgressPage() {
     const getProviderById = (id: number) => {
         const providers: { id: number; name: string; url: string; apiKey: string; model: string }[] =
             JSON.parse(localStorage.getItem('gpt_providers') || '[]');
-        return providers.find((provider) => provider.id === id);
+        return providers.find((provider) => provider.id === id) || null;
     };
 
     const downloadResults = () => {
@@ -188,10 +188,7 @@ export default function ProgressPage() {
             <div className="mb-6">
                 <h2 className="text-lg font-bold">Request Results</h2>
                 <div className="overflow-auto border rounded h-[500px]">
-                    <ResultsTable
-                        columns={[...promptVariables, ...selectedProviders.map((id) => `${getProviderById(id).name}_output`)]}
-                        results={results}
-                    />
+                    <ResultsTable columns={columns} results={results} />
                 </div>
             </div>
         </div>
