@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '../../contexts/AppContext';
 import { saveAs } from 'file-saver';
@@ -13,7 +13,7 @@ export default function ProgressPage() {
     const [completedTasks, setCompletedTasks] = useState<number>(0);
     const [totalTasks, setTotalTasks] = useState<number>(0);
     const [logs, setLogs] = useState<string[]>([]);
-    const [results, setResults] = useState<Record<string, any>[]>([]);
+    const [results, setResults] = useState<Record<string, string | number | null>[]>([]);
     const [isComplete, setIsComplete] = useState<boolean>(false);
     const [columns, setColumns] = useState<string[]>([]);
     const [promptVariables, setPromptVariables] = useState<string[]>([]);
@@ -27,7 +27,6 @@ export default function ProgressPage() {
 
     useEffect(() => {
         if (!prompt || !uploadedFile || selectedProviders.length === 0) {
-            console.log('Redirecting to home as no prompt or file is available.');
             router.push('/');
             return;
         }
@@ -35,28 +34,20 @@ export default function ProgressPage() {
         const variables = [...new Set(prompt.match(/{{(.*?)}}/g)?.map((v) => v.replace(/{{|}}/g, '')) || [])];
         setPromptVariables(variables);
 
-        const savedConfig = localStorage.getItem('request_config');
-        if (savedConfig) {
-            const config = JSON.parse(savedConfig);
-            setConcurrentRequests(config.concurrentRequests || 10);
-            setTimeoutValue(config.timeout || 60);
-            setRetries(config.retries || 3);
-        }
-
         const reader = new FileReader();
         reader.onload = async (event) => {
             const binary = event.target?.result as ArrayBuffer;
             const workbook = XLSX.read(binary, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, { header: 1 });
+            const jsonData = XLSX.utils.sheet_to_json<{ [key: string]: string | number | null }>(sheet, { header: 1 });
 
             const headers = jsonData[0] as string[];
             const data = jsonData.slice(1).map((row) =>
                 headers.reduce((acc, key, index) => {
                     acc[key] = row[index] || '';
                     return acc;
-                }, {} as Record<string, any>)
+                }, {} as Record<string, string | number | null>)
             );
 
             setColumns(headers);
@@ -67,14 +58,7 @@ export default function ProgressPage() {
         reader.readAsArrayBuffer(uploadedFile);
     }, [prompt, uploadedFile, selectedProviders, router]);
 
-    useEffect(() => {
-        if (results.length > 0 && !isRunningRef.current) {
-            isRunningRef.current = true;
-            handleRequests();
-        }
-    }, [results]);
-
-    const handleRequests = async () => {
+    const handleRequests = useCallback(async () => {
         const updatedResults = [...results];
         const queue: (() => Promise<void>)[] = [];
         let processedTasks = 0;
@@ -144,11 +128,19 @@ export default function ProgressPage() {
         await Promise.all(queue.map((task) => task()));
         setResults(updatedResults);
         setIsComplete(true);
-    };
+    }, [results, selectedProviders, totalTasks, retries, timeout, prompt, concurrentRequests]);
+
+    useEffect(() => {
+        if (results.length > 0 && !isRunningRef.current) {
+            isRunningRef.current = true;
+            handleRequests();
+        }
+    }, [results, handleRequests]);
 
     const getProviderById = (id: number) => {
-        const providers = JSON.parse(localStorage.getItem('gpt_providers') || '[]');
-        return providers.find((provider: any) => provider.id === id);
+        const providers: { id: number; name: string; url: string; apiKey: string; model: string }[] =
+            JSON.parse(localStorage.getItem('gpt_providers') || '[]');
+        return providers.find((provider) => provider.id === id);
     };
 
     const downloadResults = () => {
