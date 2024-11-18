@@ -7,13 +7,23 @@ import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import ResultsTable from '../../components/ResultsTable';
 
+interface Provider {
+    id: number;
+    name: string;
+    url: string;
+    apiKey: string;
+    model: string;
+}
+
+type RowData = Record<string, string | number | null | undefined>;
+
 export default function ProgressPage() {
     const { prompt, uploadedFile, selectedProviders } = useAppContext();
     const [progress, setProgress] = useState<number>(0);
     const [completedTasks, setCompletedTasks] = useState<number>(0);
     const [totalTasks, setTotalTasks] = useState<number>(0);
     const [logs, setLogs] = useState<string[]>([]);
-    const [results, setResults] = useState<Record<string, string | number | null | undefined>[]>([]);
+    const [results, setResults] = useState<RowData[]>([]);
     const [isComplete, setIsComplete] = useState<boolean>(false);
     const [columns, setColumns] = useState<string[]>([]);
 
@@ -36,14 +46,14 @@ export default function ProgressPage() {
             const workbook = XLSX.read(binary, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json<{ [key: string]: string | number | null }>(sheet, { header: 1 });
+            const jsonData = XLSX.utils.sheet_to_json<RowData>(sheet, { header: 1 });
 
             const headers = jsonData[0] as string[];
             const data = jsonData.slice(1).map((row) =>
                 headers.reduce((acc, key, index) => {
                     acc[key] = row[index] || '';
                     return acc;
-                }, {} as Record<string, string | number | null>)
+                }, {} as RowData)
             );
 
             setColumns(headers);
@@ -64,6 +74,8 @@ export default function ProgressPage() {
 
             for (const providerId of selectedProviders) {
                 const provider = getProviderById(providerId);
+                if (!provider) continue;
+
                 queue.push(async () => {
                     if (processedTasks >= totalTasks) return;
 
@@ -99,14 +111,14 @@ export default function ProgressPage() {
                                 throw new Error(`HTTP ${response.status} ${response.statusText}`);
                             }
 
-                            const result: { choices?: { message?: { content: string } }[] } = await response.json();
+                            const result = (await response.json()) as { choices?: { message?: { content: string } }[] };
                             row[`${provider.name}_output`] = result.choices?.[0]?.message?.content || 'No output';
                             setLogs((prev) => [...prev, `Row ${i + 1}: ${provider.name} request successful.`]);
                             break;
-                        } catch (error: any) {
+                        } catch (error: unknown) {
                             if (attempt === retries) {
-                                row[`${provider.name}_output`] = `Request failed: ${error.message}`;
-                                setLogs((prev) => [...prev, `Row ${i + 1}: ${provider.name} request failed - ${error.message}`]);
+                                row[`${provider.name}_output`] = `Request failed: ${(error as Error).message}`;
+                                setLogs((prev) => [...prev, `Row ${i + 1}: ${provider.name} request failed - ${(error as Error).message}`]);
                             } else {
                                 setLogs((prev) => [...prev, `Row ${i + 1}: ${provider.name} retrying (${attempt}/${retries})...`]);
                             }
@@ -135,9 +147,8 @@ export default function ProgressPage() {
         }
     }, [results, handleRequests]);
 
-    const getProviderById = (id: number) => {
-        const providers: { id: number; name: string; url: string; apiKey: string; model: string }[] =
-            JSON.parse(localStorage.getItem('gpt_providers') || '[]');
+    const getProviderById = (id: number): Provider | null => {
+        const providers: Provider[] = JSON.parse(localStorage.getItem('gpt_providers') || '[]');
         return providers.find((provider) => provider.id === id) || null;
     };
 
