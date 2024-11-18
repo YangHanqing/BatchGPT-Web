@@ -13,10 +13,9 @@ export default function ProgressPage() {
     const [completedTasks, setCompletedTasks] = useState<number>(0);
     const [totalTasks, setTotalTasks] = useState<number>(0);
     const [logs, setLogs] = useState<string[]>([]);
-    const [results, setResults] = useState<Record<string, string | number | null>[]>([]);
+    const [results, setResults] = useState<Record<string, string | number | null | undefined>[]>([]);
     const [isComplete, setIsComplete] = useState<boolean>(false);
     const [columns, setColumns] = useState<string[]>([]);
-    const [promptVariables, setPromptVariables] = useState<string[]>([]);
 
     const concurrentRequests = 10; // 最大并发请求数
     const timeout = 60; // 请求超时时间（秒）
@@ -30,9 +29,6 @@ export default function ProgressPage() {
             router.push('/');
             return;
         }
-
-        const variables = [...new Set(prompt.match(/{{(.*?)}}/g)?.map((v) => v.replace(/{{|}}/g, '')) || [])];
-        setPromptVariables(variables);
 
         const reader = new FileReader();
         reader.onload = async (event) => {
@@ -87,7 +83,9 @@ export default function ProgressPage() {
                                     messages: [
                                         {
                                             role: 'user',
-                                            content: prompt.replace(/{{(.*?)}}/g, (_, variable) => row[variable] || ''),
+                                            content: prompt.replace(/{{(.*?)}}/g, (_, variable) =>
+                                                row[variable as string] || ''
+                                            ),
                                         },
                                     ],
                                     stream: false,
