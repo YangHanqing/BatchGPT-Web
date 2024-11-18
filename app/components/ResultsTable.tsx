@@ -2,9 +2,13 @@
 
 import React from 'react';
 
+interface DataRow {
+    [key: string]: string | number | null | undefined; // 定义每行的数据类型
+}
+
 interface DataTableProps {
-    columns: string[]; // 要展示的列（包括 Prompt 中的变量和输出列）
-    results: any[]; // 数据行
+    columns: string[]; // 要展示的列
+    results: DataRow[]; // 数据行
 }
 
 const DataTable: React.FC<DataTableProps> = ({ columns, results }) => {
@@ -25,7 +29,7 @@ const DataTable: React.FC<DataTableProps> = ({ columns, results }) => {
                         <tr key={rowIndex}>
                             {columns.map((col) => (
                                 <td key={col} className="border border-gray-300 p-2">
-                                    {row[col] || ''}
+                                    {row[col] ?? ''} {/* 使用可选链处理可能的 undefined */}
                                 </td>
                             ))}
                         </tr>
