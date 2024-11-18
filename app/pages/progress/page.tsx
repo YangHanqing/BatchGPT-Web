@@ -46,20 +46,26 @@ export default function ProgressPage() {
             const workbook = XLSX.read(binary, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json<RowData>(sheet, { header: 1 });
+            const jsonData = XLSX.utils.sheet_to_json<Record<string, string | number | null>>(sheet, { header: 1 });
 
             const headers = jsonData[0] as string[];
             const data = jsonData.slice(1).map((row) =>
                 headers.reduce((acc, key, index) => {
-                    acc[key] = row[index] || '';
+                    acc[key] = row[index] || ''; // 确保值是 string 或 number
                     return acc;
-                }, {} as RowData)
+                }, {} as Record<string, string | number | null>)
             );
 
+            const sanitizedData = data.map((row) =>
+                Object.fromEntries(
+                    Object.entries(row).map(([key, value]) => [key, value ?? '']) // 替换 null 为空字符串
+                ) as PreviewData
+            );
+
+            setPreviewData(sanitizedData.slice(0, 10)); // 使用经过类型兼容处理的数据
             setColumns(headers);
-            setResults(data);
-            setTotalTasks(data.length * selectedProviders.length);
         };
+
 
         reader.readAsArrayBuffer(uploadedFile);
     }, [prompt, uploadedFile, selectedProviders, router]);
